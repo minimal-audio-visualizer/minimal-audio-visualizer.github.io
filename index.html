@@ -6,7 +6,7 @@
     <title>Minimalist Audio Visualizer</title>
     <style>
         :root {
-            --main-bg: #dcdcdc;
+            --main-bg: #ffffff; /* Changed from #dcdcdc to plain white */
             --main-fg: #222222;
             --border-style: 2px solid var(--main-fg);
             --font-stack: 'Courier New', Courier, monospace;
@@ -68,7 +68,7 @@
 <body data-theme="light">
 
     <div id="controls">
-        <p>! [ HYPER-REACTOR ] !</p>
+        <p>Minimalist Audio Visualizer</p> <!-- Changed from ! [ HYPER-REACTOR ] ! -->
         
         <fieldset>
             <legend>Theme</legend>
@@ -181,11 +181,10 @@
                 analyser = audioContext.createAnalyser();
                 source.connect(analyser);
                 
-                // If exporting, route audio to destination AND recorder. Otherwise, just destination.
                 if (exportCheckbox.checked) {
                     const destination = audioContext.createMediaStreamDestination();
                     analyser.connect(destination);
-                    analyser.connect(audioContext.destination); // So we can hear it
+                    analyser.connect(audioContext.destination);
                     startRecording(destination.stream);
                 } else {
                     analyser.connect(audioContext.destination);
@@ -207,7 +206,6 @@
             animationFrameId = requestAnimationFrame(renderFrame);
             analyser.getByteFrequencyData(dataArray);
 
-            // ... (The entire hyper-reactive drawing engine from the previous version)
             const bufferLength = analyser.frequencyBinCount;
             const kickBand = dataArray.slice(1, 5), snareBand = dataArray.slice(20, 80), hihatBand = dataArray.slice(200, 400);
             const bassAvg = getAverage(dataArray.slice(0, 10)), midAvg = getAverage(dataArray.slice(10, 200));
@@ -296,7 +294,7 @@
             } else {
                 audioPlayer.play();
                 statusMessage.style.display = 'none';
-                renderFrame(); // Resume animation loop
+                renderFrame();
             }
         }
         
@@ -315,7 +313,7 @@
         }
 
         document.addEventListener('keydown', e => {
-            if (controls.classList.contains('hidden')) { // Only active during visualization
+            if (controls.classList.contains('hidden')) {
                 switch(e.key.toLowerCase()) {
                     case 'p': case ' ': e.preventDefault(); togglePause(); break;
                     case 'r': audioPlayer.currentTime = 0; showStatus('Restarted', 1000); break;
@@ -327,7 +325,7 @@
         });
 
         function startRecording(audioStream) {
-            const videoStream = canvas.captureStream(30); // 30 FPS
+            const videoStream = canvas.captureStream(30);
             const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
             mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
             
@@ -342,7 +340,7 @@
 
             mediaRecorder.onstop = () => {
                 showStatus('Processing video...', 0);
-                setTimeout(() => { // Give it a moment to process
+                setTimeout(() => {
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     setupDownloadLink(blob);
                     resetToMenu();
@@ -365,7 +363,7 @@
             a.style.textDecoration = 'none';
             a.style.color = 'var(--main-fg)';
             controls.appendChild(a);
-            a.onclick = () => { // Clean up the link after click
+            a.onclick = () => {
                 setTimeout(() => { a.remove(); }, 100);
             };
         }
@@ -373,7 +371,7 @@
         function getAverage(arr) { return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0; }
         window.addEventListener('resize', () => { if (!exportCheckbox.checked) resetCanvasToWindow()});
         
-        ctx.imageSmoothingEnabled = false; // Initial setting
+        ctx.imageSmoothingEnabled = false;
     };
     </script>
 </body>
