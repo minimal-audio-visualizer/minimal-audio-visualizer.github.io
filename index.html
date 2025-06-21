@@ -6,19 +6,13 @@
     <title>Minimalist Audio Visualizer</title>
     <style>
         :root {
-            --main-bg: #ffffff; /* Changed from #dcdcdc to plain white */
+            --main-bg: #ffffff;
             --main-fg: #222222;
             --border-style: 2px solid var(--main-fg);
             --font-stack: 'Courier New', Courier, monospace;
         }
-        body[data-theme="cream"] {
-            --main-bg: #f5f1e6;
-            --main-fg: #3a3529;
-        }
-        body[data-theme="dark"] {
-            --main-bg: #1a1a1a;
-            --main-fg: #e0e0e0;
-        }
+        body[data-theme="cream"] { --main-bg: #f5f1e6; --main-fg: #3a3529; }
+        body[data-theme="dark"] { --main-bg: #1a1a1a; --main-fg: #e0e0e0; }
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden; background-color: var(--main-bg);
@@ -26,10 +20,8 @@
             transition: background-color 0.3s, color 0.3s;
         }
         #canvas-wrapper {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            z-index: 1;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center; z-index: 1;
         }
         #visualizer { background-color: var(--main-bg); }
         #controls {
@@ -49,13 +41,11 @@
         #file-label:hover { background-color: var(--main-fg); color: var(--main-bg); }
         #file-input { display: none; }
         body.dragover #controls { border-style: dashed; }
-        
         fieldset { border: var(--border-style); padding: 0.5rem 1rem; }
         legend { text-align: left; padding: 0 0.5rem; }
         .options-group { display: flex; justify-content: center; gap: 1rem; align-items: center; padding-top: 0.5rem;}
         .options-group label { cursor: pointer; }
         #export-options.disabled { opacity: 0.5; pointer-events: none; }
-
         #status-message {
             position: fixed; bottom: 20px; left: 50%;
             transform: translateX(-50%); z-index: 20;
@@ -68,7 +58,7 @@
 <body data-theme="light">
 
     <div id="controls">
-        <p>Minimalist Audio Visualizer</p> <!-- Changed from ! [ HYPER-REACTOR ] ! -->
+        <p>Minimalist Audio Visualizer</p>
         
         <fieldset>
             <legend>Theme</legend>
@@ -102,76 +92,24 @@
     window.onload = () => {
         const controls = document.getElementById('controls');
         const fileInput = document.getElementById('file-input');
-        const canvasWrapper = document.getElementById('canvas-wrapper');
         const canvas = document.getElementById('visualizer');
         const ctx = canvas.getContext('2d');
         const statusMessage = document.getElementById('status-message');
         const audioPlayer = new Audio();
 
-        // --- State Variables ---
         let audioContext, analyser, source, dataArray, animationFrameId;
-        let isPaused = false;
-        let mediaRecorder, recordedChunks = [];
+        let isPaused = false, mediaRecorder, recordedChunks = [];
         
-        // Visuals State
-        let sparks = [], shockwaves = [], shatters = [], hihatTicks = [];
-        let rotation = 0, time = 0;
-        let prevBass = 0, prevMid = 0;
-        let shake = 0;
-
-        // --- UI Setup ---
-        const themeSelector = document.getElementById('theme-selector');
-        themeSelector.addEventListener('change', e => {
-            document.body.setAttribute('data-theme', e.target.value);
-        });
-
-        const exportCheckbox = document.getElementById('export-checkbox');
-        const exportOptions = document.getElementById('export-options');
-        exportCheckbox.addEventListener('change', () => {
-            exportOptions.classList.toggle('disabled', !exportCheckbox.checked);
-        });
-
-        function showStatus(msg, duration = 0) {
-            statusMessage.textContent = msg;
-            statusMessage.style.display = 'block';
-            if (duration > 0) {
-                setTimeout(() => statusMessage.style.display = 'none', duration);
-            }
-        }
-
-        function setupCanvasForExport() {
-            const ratioStr = document.querySelector('input[name="aspect-ratio"]:checked').value;
-            const [w, h] = ratioStr.split(':').map(Number);
-            
-            const maxW = window.innerWidth * 0.9;
-            const maxH = window.innerHeight * 0.9;
-
-            let canvasW, canvasH;
-            if ((maxW / maxH) > (w / h)) {
-                canvasH = maxH;
-                canvasW = maxH * (w / h);
-            } else {
-                canvasW = maxW;
-                canvasH = maxW * (h / w);
-            }
-            canvas.width = Math.round(canvasW);
-            canvas.height = Math.round(canvasH);
-        }
-
-        function resetCanvasToWindow() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
+        let sparks = [], shockwaves = [], shatters = [], hihatTicks = [], sizzleRain = [];
+        let rotation = 0, time = 0, shake = 0, flashOpacity = 0, kickBoost = 0;
+        let prevKick = 0, prevSnare = 0;
 
         function handleFile(file) {
             if (!file) return;
-            resetToMenu(false); // Clean up previous state without showing controls
+            resetToMenu(false);
 
-            if (exportCheckbox.checked) {
-                setupCanvasForExport();
-            } else {
-                resetCanvasToWindow();
-            }
+            if (exportCheckbox.checked) setupCanvasForExport();
+            else resetCanvasToWindow();
             
             audioPlayer.src = URL.createObjectURL(file);
             
@@ -180,19 +118,22 @@
                 source = audioContext.createMediaElementSource(audioPlayer);
                 analyser = audioContext.createAnalyser();
                 source.connect(analyser);
-                
-                if (exportCheckbox.checked) {
-                    const destination = audioContext.createMediaStreamDestination();
-                    analyser.connect(destination);
-                    analyser.connect(audioContext.destination);
-                    startRecording(destination.stream);
-                } else {
-                    analyser.connect(audioContext.destination);
-                }
             }
 
+            // --- FIX: Re-route audio on every file load to respect export settings ---
+            analyser.disconnect();
+            if (exportCheckbox.checked) {
+                const destination = audioContext.createMediaStreamDestination();
+                analyser.connect(destination);
+                analyser.connect(audioContext.destination);
+                startRecording(destination.stream);
+            } else {
+                analyser.connect(audioContext.destination);
+            }
+            // --- END FIX ---
+
             analyser.fftSize = 1024;
-            analyser.smoothingTimeConstant = 0.3;
+            analyser.smoothingTimeConstant = 0.2;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             
             controls.classList.add('hidden');
@@ -200,177 +141,133 @@
             isPaused = false;
             renderFrame();
         }
-        
+
         function renderFrame() {
             if (isPaused) return;
             animationFrameId = requestAnimationFrame(renderFrame);
             analyser.getByteFrequencyData(dataArray);
 
-            const bufferLength = analyser.frequencyBinCount;
-            const kickBand = dataArray.slice(1, 5), snareBand = dataArray.slice(20, 80), hihatBand = dataArray.slice(200, 400);
-            const bassAvg = getAverage(dataArray.slice(0, 10)), midAvg = getAverage(dataArray.slice(10, 200));
-            const bassNorm = bassAvg / 255, midNorm = midAvg / 255, trebleNorm = getAverage(hihatBand) / 255;
-            const totalAvgNorm = (bassNorm + midNorm + trebleNorm) / 3;
+            const subBassBand = dataArray.slice(0, 2);
+            const kickBand = dataArray.slice(2, 6);
+            const snareBand = dataArray.slice(30, 80);
+            const vocalBand = dataArray.slice(10, 100);
+            const hihatBand = dataArray.slice(150, 250);
+            const sizzleBand = dataArray.slice(300, 450);
+
+            const subBassNorm = getAverage(subBassBand) / 255;
+            const midNorm = getAverage(vocalBand) / 255;
+            const hihatNorm = getAverage(hihatBand) / 255;
+            const sizzleNorm = getAverage(sizzleBand) / 255;
+            const totalAvgNorm = getAverage(dataArray) / 255;
             time++;
 
             const kickAvg = getAverage(kickBand);
-            if (kickAvg > prevBass * 1.6 && kickAvg > 140) { shockwaves.push({ r: 0, life: 40 }); if (kickAvg > 220) shake = 15; }
-            prevBass = kickAvg;
+            if (kickAvg > prevKick * 1.5 && kickAvg > 150) { shockwaves.push({ r: 0, life: 40 }); kickBoost = 1.2; if(kickAvg>220) shake=15; }
+            prevKick = kickAvg;
 
             const snareAvg = getAverage(snareBand);
-            if (snareAvg > prevMid * 1.35 && snareAvg > 100) { shatters.push({ life: 30, lines: Array(3).fill(0).map(()=>({ angle: Math.random()*Math.PI*2, len: 200+Math.random()*400 })) }); if(snareAvg > 180) shake = 10; }
-            prevMid = snareAvg;
+            if (snareAvg > prevSnare * 1.4 && snareAvg > 110) {
+                const shatterType = Math.random() > 0.5 ? 'triangle' : 'line';
+                shatters.push({ life: 30, elements: Array(3).fill(0).map(()=>({ angle: Math.random()*Math.PI*2, len: 200+Math.random()*400, type: shatterType })) });
+                flashOpacity = 0.1;
+                if(snareAvg > 180) shake = 10;
+            }
+            prevSnare = snareAvg;
 
-            if (getAverage(hihatBand) > 150) { for(let i=0; i < Math.floor(trebleNorm * 5); i++) { hihatTicks.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, life: 20 }); } }
+            if (hihatNorm > 0.55) { for(let i=0; i<Math.floor(hihatNorm*6); i++){ hihatTicks.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, life:20}); }}
+            if (sizzleNorm > 0.45) { for(let i=0; i<Math.floor(sizzleNorm*4); i++){ sizzleRain.push({x:Math.random()*canvas.width, y:0, life:40, speed:5+Math.random()*10}); }}
             
-            const theme = getComputedStyle(document.body);
-            const bgColor = theme.getPropertyValue('--main-bg');
-            const fgColor = theme.getPropertyValue('--main-fg');
-            const fadeAmount = Math.max(0.05, 0.4 - (totalAvgNorm * 0.5));
-            ctx.fillStyle = `rgba(${parseInt(bgColor.slice(1,3),16)},${parseInt(bgColor.slice(3,5),16)},${parseInt(bgColor.slice(5,7),16)}, ${fadeAmount})`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+            const theme = getComputedStyle(document.body), bgColor = theme.getPropertyValue('--main-bg'), fgColor = theme.getPropertyValue('--main-fg');
+            const fadeAmount = Math.max(0.05, 0.4 - (totalAvgNorm*0.5));
+            ctx.fillStyle=`rgba(${parseInt(bgColor.slice(1,3),16)},${parseInt(bgColor.slice(3,5),16)},${parseInt(bgColor.slice(5,7),16)}, ${fadeAmount})`;
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            if(flashOpacity > 0){ ctx.fillStyle=`rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width,canvas.height); flashOpacity=0; }
             ctx.save();
-            if(shake > 0) { ctx.translate(Math.random()*shake-shake/2, Math.random()*shake-shake/2); shake--; }
+            if(shake > 0){ ctx.translate(Math.random()*shake-shake/2, Math.random()*shake-shake/2); shake--; }
             ctx.strokeStyle = fgColor; ctx.lineWidth = 1.5; ctx.fillStyle = fgColor;
             
-            hihatTicks.forEach((t, i) => { t.life--; if(t.life<=0) hihatTicks.splice(i,1); else { ctx.globalAlpha=t.life/20; ctx.fillRect(t.x,t.y,2,2); }});
+            sizzleRain.forEach((p,i) => { p.y+=p.speed; p.life--; if(p.life<=0) sizzleRain.splice(i,1); else { ctx.globalAlpha=p.life/40; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y-20); ctx.stroke(); }});
+            hihatTicks.forEach((t,i) => { t.life--; if(t.life<=0) hihatTicks.splice(i,1); else { ctx.globalAlpha=t.life/20; ctx.fillRect(t.x,t.y,3,3); }});
             ctx.globalAlpha = 1;
 
             ctx.save();
             ctx.translate(canvas.width/2, canvas.height/2);
             
             shockwaves.forEach((s,i) => { s.life--; s.r+=20; if(s.life<=0) shockwaves.splice(i,1); else { ctx.globalAlpha=s.life/40; ctx.strokeRect(-s.r,-s.r,s.r*2,s.r*2); }});
-            shatters.forEach((s,i) => { s.life--; if(s.life<=0) shatters.splice(i,1); else { ctx.globalAlpha=s.life/30; s.lines.forEach(l=>{ctx.save(); ctx.rotate(l.angle); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(l.len,0); ctx.stroke(); ctx.restore();}); }});
-            ctx.globalAlpha = 1;
-
+            shatters.forEach((s,i) => { s.life--; if(s.life<=0) shatters.splice(i,1); else { ctx.globalAlpha=s.life/30; s.elements.forEach(el => { ctx.save(); ctx.rotate(el.angle); if (el.type === 'line') { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(el.len,0); ctx.stroke(); } else { drawTriangle(el.len, 0, 10, 0); } ctx.restore(); }); }});
+            
+            const bassNorm = getAverage(dataArray.slice(0, 10)) / 255;
             rotation += 0.001 + bassNorm * 0.02;
             ctx.lineWidth = 1.5 + bassNorm * 3;
-            const size1 = 60 + bassNorm * 250;
+            if (kickBoost > 1) kickBoost -= 0.05; else kickBoost = 1;
+            const size1 = (60 + bassNorm * 250) * kickBoost;
+            
+            const pressureWidth = subBassNorm * 40;
+            if (pressureWidth > 1) {
+                ctx.save();
+                ctx.rotate(rotation);
+                ctx.globalAlpha = subBassNorm * 0.7;
+                ctx.lineWidth = 1;
+                const pressureSize = size1 + pressureWidth * 2;
+                ctx.strokeRect(-pressureSize / 2, -pressureSize / 2, pressureSize, pressureSize);
+                ctx.restore();
+            }
+
             ctx.save(); ctx.rotate(rotation);
             ctx.strokeRect(-size1/2, -size1/2, size1, size1);
             if(bassNorm > 0.7) { for(let i=0; i<3; i++) { ctx.globalAlpha=Math.random()*0.5; ctx.translate(Math.random()*10-5,Math.random()*10-5); ctx.strokeRect(-size1/2,-size1/2,size1,size1); } }
             ctx.restore();
             
-            const size2 = 40 + bassNorm * 150;
-            ctx.save();
-            ctx.beginPath(); ctx.rect(-canvas.width, -canvas.height, canvas.width*2, canvas.height*2);
-            ctx.save(); ctx.rotate(-rotation*1.2); ctx.rect(-size2/2, -size2/2, size2, size2); ctx.restore();
-            ctx.clip('evenodd');
+            const size2 = (40 + bassNorm * 150) * kickBoost;
+            ctx.save(); ctx.beginPath(); ctx.rect(-canvas.width*2,-canvas.height*2,canvas.width*4,canvas.height*4); ctx.save(); ctx.rotate(-rotation*1.2); ctx.rect(-size2/2,-size2/2,size2,size2); ctx.restore(); ctx.clip('evenodd');
             ctx.lineWidth = 1.5; ctx.beginPath();
-            const waveWidth=canvas.width*0.9, amplitude=midNorm*120, frequency=0.01+midNorm*0.05;
-            for(let x=-waveWidth/2; x<waveWidth/2; x++){ const y=Math.sin(x*frequency+time*0.05)*amplitude*Math.sin(time*0.01); if(x===-waveWidth/2) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+            const waveWidth = canvas.width, amplitude=midNorm*100, frequency=0.01+midNorm*0.05, highFreq=0.1+midNorm*0.2;
+            for(let x=-waveWidth/2; x<waveWidth/2; x++){ const y=(Math.sin(x*frequency+time*0.05) + Math.sin(x*highFreq+time*0.1)*0.3) * amplitude * Math.sin(time*0.01); if(x===-waveWidth/2) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
             ctx.stroke();
             ctx.restore();
             
             ctx.save(); ctx.rotate(-rotation * 1.2); ctx.strokeRect(-size2/2, -size2/2, size2, size2); ctx.restore();
 
-            if (trebleNorm > 0.6) { for (let i=0; i<Math.floor(trebleNorm*30); i++) { const angle=Math.random()*Math.PI*2, speed=1+Math.random()*4; sparks.push({x:0,y:0,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life:80}); }}
-            sparks.forEach((p,i) => { p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0) sparks.splice(i,1); else { ctx.globalAlpha=p.life/80; ctx.beginPath(); ctx.moveTo(p.x-3,p.y); ctx.lineTo(p.x+3,p.y); ctx.moveTo(p.x,p.y-3); ctx.lineTo(p.x,p.y+3); ctx.stroke(); }});
+            // --- REDUCED PARTICLE SPAWN RATE ---
+            if (hihatNorm > 0.55) { for (let i=0; i<Math.floor(hihatNorm*4); i++) { const angle=Math.random()*Math.PI*2, speed=1+Math.random()*5; sparks.push({x:0,y:0,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,life:80}); }}
+            sparks.forEach((p,i) => {
+                p.x+=p.vx; p.y+=p.vy; p.life--;
+                if(p.life<=0) sparks.splice(i,1);
+                else {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(Math.PI / 4);
+                    ctx.globalAlpha=p.life/80;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(-4, -4, 8, 8);
+                    ctx.restore();
+                }
+            });
             
             ctx.restore(); ctx.restore();
         }
         
-        // --- Controls & Handlers ---
+        function drawTriangle(x, y, size, rotation) { ctx.save(); ctx.translate(x, y); ctx.rotate(rotation); ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size/2, size/2); ctx.lineTo(-size/2, size/2); ctx.closePath(); ctx.stroke(); ctx.restore(); }
+
+        const themeSelector = document.getElementById('theme-selector');
+        themeSelector.addEventListener('change', e => document.body.setAttribute('data-theme', e.target.value));
+        const exportCheckbox = document.getElementById('export-checkbox'), exportOptions = document.getElementById('export-options');
+        exportCheckbox.addEventListener('change', () => exportOptions.classList.toggle('disabled', !exportCheckbox.checked));
+        function showStatus(msg, duration=0){ statusMessage.textContent=msg; statusMessage.style.display='block'; if(duration>0) setTimeout(()=>statusMessage.style.display='none',duration); }
+        function setupCanvasForExport(){ const [w,h]=document.querySelector('input[name="aspect-ratio"]:checked').value.split(':').map(Number); const maxW=window.innerWidth*0.9, maxH=window.innerHeight*0.9; if((maxW/maxH)>(w/h)){canvas.height=maxH; canvas.width=maxH*(w/h);}else{canvas.width=maxW; canvas.height=maxW*(h/w);} canvas.width=Math.round(canvas.width); canvas.height=Math.round(canvas.height); }
+        function resetCanvasToWindow(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
         fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
         document.body.addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragover'); });
         document.body.addEventListener('dragleave', () => document.body.classList.remove('dragover'));
         document.body.addEventListener('drop', (e) => { e.preventDefault(); document.body.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
-        
-        audioPlayer.addEventListener('ended', () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            } else {
-                resetToMenu();
-            }
-        });
-
-        function togglePause() {
-            if (!audioContext) return;
-            isPaused = !isPaused;
-            if (isPaused) {
-                audioPlayer.pause();
-                showStatus('Paused', 2000);
-            } else {
-                audioPlayer.play();
-                statusMessage.style.display = 'none';
-                renderFrame();
-            }
-        }
-        
-        function resetToMenu(showControls = true) {
-            cancelAnimationFrame(animationFrameId);
-            audioPlayer.pause();
-            audioPlayer.src = "";
-            isPaused = false;
-            sparks = []; shockwaves = []; shatters = []; hihatTicks = [];
-            shake = 0; rotation = 0;
-            if (showControls) {
-                controls.classList.remove('hidden');
-            }
-            ctx.clearRect(0,0,canvas.width,canvas.height);
-            statusMessage.style.display = 'none';
-        }
-
-        document.addEventListener('keydown', e => {
-            if (controls.classList.contains('hidden')) {
-                switch(e.key.toLowerCase()) {
-                    case 'p': case ' ': e.preventDefault(); togglePause(); break;
-                    case 'r': audioPlayer.currentTime = 0; showStatus('Restarted', 1000); break;
-                    case 'escape': case 'q': resetToMenu(); break;
-                    case 'arrowleft': audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5); showStatus('-5s', 1000); break;
-                    case 'arrowright': audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 5); showStatus('+5s', 1000); break;
-                }
-            }
-        });
-
-        function startRecording(audioStream) {
-            const videoStream = canvas.captureStream(30);
-            const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
-            mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
-            
-            recordedChunks = [];
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
-            };
-
-            mediaRecorder.onstart = () => {
-                showStatus('🔴 Recording...');
-            };
-
-            mediaRecorder.onstop = () => {
-                showStatus('Processing video...', 0);
-                setTimeout(() => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    setupDownloadLink(blob);
-                    resetToMenu();
-                }, 500);
-            };
-            
-            mediaRecorder.start();
-        }
-
-        function setupDownloadLink(blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `visualizer-export-${Date.now()}.webm`;
-            a.textContent = `DOWNLOAD VIDEO`;
-            a.style.display = 'block';
-            a.style.marginTop = '1rem';
-            a.style.padding = '0.5rem';
-            a.style.border = 'var(--border-style)';
-            a.style.textDecoration = 'none';
-            a.style.color = 'var(--main-fg)';
-            controls.appendChild(a);
-            a.onclick = () => {
-                setTimeout(() => { a.remove(); }, 100);
-            };
-        }
-
-        function getAverage(arr) { return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0; }
-        window.addEventListener('resize', () => { if (!exportCheckbox.checked) resetCanvasToWindow()});
-        
+        audioPlayer.addEventListener('ended', () => { if(mediaRecorder&&mediaRecorder.state==='recording') mediaRecorder.stop(); else resetToMenu(); });
+        function togglePause(){ if(!audioContext)return; isPaused=!isPaused; if(isPaused){audioPlayer.pause(); showStatus('Paused',2000);}else{audioPlayer.play(); statusMessage.style.display='none'; renderFrame();}}
+        function resetToMenu(showControls=true){ cancelAnimationFrame(animationFrameId); audioPlayer.pause(); audioPlayer.src=""; isPaused=false; sparks=[]; shockwaves=[]; shatters=[]; hihatTicks=[]; sizzleRain=[]; shake=0; rotation=0; if(showControls)controls.classList.remove('hidden'); ctx.clearRect(0,0,canvas.width,canvas.height); statusMessage.style.display='none'; }
+        document.addEventListener('keydown', e=>{if(controls.classList.contains('hidden')){switch(e.key.toLowerCase()){case 'p': case ' ':e.preventDefault();togglePause();break; case 'r':audioPlayer.currentTime=0;showStatus('Restarted',1000);break; case 'escape':case 'q':resetToMenu();break; case 'arrowleft':audioPlayer.currentTime=Math.max(0,audioPlayer.currentTime-5);showStatus('-5s',1000);break; case 'arrowright':audioPlayer.currentTime=Math.min(audioPlayer.duration,audioPlayer.currentTime+5);showStatus('+5s',1000);break;}}});
+        function startRecording(audioStream){ const videoStream=canvas.captureStream(30); const combinedStream=new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]); mediaRecorder=new MediaRecorder(combinedStream,{mimeType:'video/webm'}); recordedChunks=[]; mediaRecorder.ondataavailable=e=>{if(e.data.size>0)recordedChunks.push(e.data);}; mediaRecorder.onstart=()=>{showStatus('🔴 Recording...');}; mediaRecorder.onstop=()=>{showStatus('Processing video...',0); setTimeout(()=>{const blob=new Blob(recordedChunks,{type:'video/webm'}); setupDownloadLink(blob); resetToMenu();},500);}; mediaRecorder.start();}
+        function setupDownloadLink(blob){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`visualizer-export-${Date.now()}.webm`; a.textContent=`DOWNLOAD VIDEO`; a.style.display='block'; a.style.marginTop='1rem'; a.style.padding='0.5rem'; a.style.border='var(--border-style)'; a.style.textDecoration='none'; a.style.color='var(--main-fg)'; controls.appendChild(a); a.onclick=()=>{setTimeout(()=>{a.remove();},100);};}
+        function getAverage(arr){ return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length:0; }
+        window.addEventListener('resize', ()=>{ if(!exportCheckbox.checked)resetCanvasToWindow()});
         ctx.imageSmoothingEnabled = false;
     };
     </script>
